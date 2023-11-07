@@ -5,11 +5,24 @@ import java.net.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Servidor para un chat entre múltiples usuarios
+ *
+ * @author Subgrupo 1
+ */
 public class Server {
 
+    /** Puerto donde escucha el servidor */
     private static final int PUERTO = 6764;
+
+    /** Mapa que almacena los usuarios conectados y sus canales de escritura */
     private static Map<String, PrintWriter> usuarios = new HashMap<>();
 
+    /**
+     * Punto de entrada al programa
+     *
+     * @param args argumentos de línea de comandos
+     */
     public static void main(String[] args) {
         try {
             ServerSocket servidor = new ServerSocket(PUERTO);
@@ -48,13 +61,31 @@ public class Server {
         }
     }
 
+    /**
+     * Clase interna para manejar la conexión de cada cliente
+     */
     static class ManejadorCliente implements Runnable {
 
+        /** Socket de comunicación con el cliente */
         private Socket socket;
+
+        /** Canal de lectura al cliente */
         private BufferedReader entrada;
+
+        /** Canal de escritura al cliente */
         private PrintWriter salida;
+
+        /** Nombre de usuario del cliente */
         private String nombreUsuario;
 
+        /**
+         * Crea un manejador para un cliente
+         *
+         * @param socket socket de comunicación
+         * @param entrada canal de lectura
+         * @param salida canal de escritura
+         * @param nombreUsuario nombre del usuario
+         */
         public ManejadorCliente(Socket socket, BufferedReader entrada, PrintWriter salida, String nombreUsuario) {
             this.socket = socket;
             this.entrada = entrada;
@@ -62,6 +93,10 @@ public class Server {
             this.nombreUsuario = nombreUsuario;
         }
 
+        /**
+         * Ejecuta el hilo de atención al cliente
+         *
+         */
         @Override
         public void run() {
             try {
