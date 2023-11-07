@@ -31,6 +31,7 @@ public class Client extends javax.swing.JFrame {
      *
      * @param ip la IP del servidor
      * @param port el puerto de conexión
+     *
      */
     private static void ConnectSocket(String ip, Integer port) {
         try {
