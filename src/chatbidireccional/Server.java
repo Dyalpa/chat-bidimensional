@@ -5,141 +5,130 @@ import java.net.*;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Servidor para un chat entre múltiples usuarios
- *
- * @author Subgrupo 1
- */
+//Servidor para un chat entre múltiples usuarios
 public class Server {
+	
+	 //Puerto donde escucha el servidor
+  private static final int PUERTO = 6262;
+  
+  //Mapa que almacena los usuarios conectados y sus canales de escritura
+  private static Map<String, PrintWriter> usuarios = new HashMap<>();
 
-    /** Puerto donde escucha el servidor */
-    private static final int PUERTO = 6764;
+  public static void main(String[] args) {
+  	 try {
+           // Inicia el servidor en el puerto especificado
+           ServerSocket servidor = new ServerSocket(PUERTO);
+           System.out.println("Servidor iniciado y contestando OK");
 
-    /** Mapa que almacena los usuarios conectados y sus canales de escritura */
-    private static Map<String, PrintWriter> usuarios = new HashMap<>();
+           // Bucle infinito para aceptar conexiones de clientes
+           while (true) {
+               // Acepta una conexión de un cliente
+               Socket usuario = servidor.accept();
+               System.out.println("Cliente con la IP " + usuario.getInetAddress().getHostName() + " conectado.");
 
-    /**
-     * Punto de entrada al programa
-     *
-     * @param args argumentos de línea de comandos
-     */
-    public static void main(String[] args) {
-        try {
-            ServerSocket servidor = new ServerSocket(PUERTO);
-            System.out.println("Servidor iniciado y contestando OK");
+               // Crea los canales de entrada y salida para el cliente
+               BufferedReader entrada = new BufferedReader(new InputStreamReader(usuario.getInputStream()));
+               PrintWriter salida = new PrintWriter(usuario.getOutputStream(), true);
 
-            while (true) {
-                Socket usuario = servidor.accept();
+               // Lee el nombre de usuario del cliente
+               String nombreUsuario = entrada.readLine();
+               // Comprueba si el nombre de usuario es válido
+               if (nombreUsuario == null || nombreUsuario.isEmpty() || usuarios.containsKey(nombreUsuario)) {
+                   salida.println("Server: Nombre de usuario no válido. Debes proporcionar un nombre único.");
+                   usuario.close();
+                   continue;
+               }
 
-                BufferedReader entrada = new BufferedReader(new InputStreamReader(usuario.getInputStream()));
-                PrintWriter salida = new PrintWriter(usuario.getOutputStream(), true);
+               // Añade el usuario a la lista de usuarios conectados
+               usuarios.put(nombreUsuario, salida);
+               System.out.println("Usuario " + nombreUsuario + " conectado");
 
-                // Pedir al usuario su nombre de usuario
-                String nombreUsuario = entrada.readLine();
-                if (nombreUsuario == null || nombreUsuario.isEmpty() || usuarios.containsKey(nombreUsuario)) {
-                    salida.println("Server: Nombre de usuario no válido. Debes proporcionar un nombre único.");
-                    usuario.close();
-                    continue;
-                }
+               // Informa a los demás usuarios de la conexión del nuevo usuario
+               for (PrintWriter s : usuarios.values()) {
+                   if (s != salida) {
+                       s.println("Server: " + nombreUsuario + " se ha conectado");
+                   }
+               }
 
-                usuarios.put(nombreUsuario, salida);
-                System.out.println("Usuario " + nombreUsuario + " conectado");
+               // Crea un nuevo hilo para manejar la comunicación con este cliente
+               Thread thread = new Thread(new ManejadorCliente(usuario, entrada, salida, nombreUsuario));
+               thread.start();
+           }
+       } catch (IOException e) {
+           System.out.println("Error al iniciar el servidor: " + e.getMessage());
+       }
+   }
 
-                // Notificar a los otros usuarios que alguien se ha conectado
-                for (PrintWriter s : usuarios.values()) {
-                    if (s != salida) {
-                        s.println("Server: " + nombreUsuario + " se ha conectado");
-                    }
-                }
+   // Clase interna para manejar la comunicación con un cliente específico
+   static class ManejadorCliente implements Runnable {
+       private Socket socket;
+       private BufferedReader entrada;
+       private PrintWriter salida;
+       private String nombreUsuario;
 
-                // Iniciar un hilo para escuchar y reenviar mensajes para este usuario
-                Thread thread = new Thread(new ManejadorCliente(usuario, entrada, salida, nombreUsuario));
-                thread.start();
-            }
-        } catch (IOException e) {
-            System.out.println("Error al iniciar el servidor: " + e.getMessage());
-        }
-    }
+       // Constructor de la clase ManejadorCliente
+       public ManejadorCliente(Socket socket, BufferedReader entrada, PrintWriter salida, String nombreUsuario) {
+           this.socket = socket;
+           this.entrada = entrada;
+           this.salida = salida;
+           this.nombreUsuario = nombreUsuario;
+       }
 
-    /**
-     * Clase interna para manejar la conexión de cada cliente
-     */
-    static class ManejadorCliente implements Runnable {
+       @Override
+       public void run() {
+           try {
+               // Crea una lista de usuarios disponibles
+               String listaUsuarios = "Usuarios disponibles:\n";
+               if (usuarios.size() < 2) {
+                   listaUsuarios = "- No hay nadie conectado.\n";
+               } else {
+                   for (String usuarioDisponible : usuarios.keySet()) {
+                       if (!usuarioDisponible.equals(nombreUsuario)) {
+                           listaUsuarios += "- " + usuarioDisponible + "\n";
+                       }
+                   }
+               }
 
-        /** Socket de comunicación con el cliente */
-        private Socket socket;
+               // Solicita al cliente que elija con quién desea chatear
+               salida.println("Server: Elige con quién deseas chatear. \nEscribe el nombre de usuario de tu destinatario:\n" + listaUsuarios);
+               String destinatario = entrada.readLine();
 
-        /** Canal de lectura al cliente */
-        private BufferedReader entrada;
+               // Comprueba si el destinatario existe
+               if (!usuarios.containsKey(destinatario)) {
+                   // Si el destinatario no existe, cierra la conexión
+                   salida.println("Server: El usuario " + destinatario + " no existe o no está conectado. Chat cerrado.");
+                   socket.close();
+                   System.out.println("Usuario " + nombreUsuario + " desconectado");
+                   return;
+               }
 
-        /** Canal de escritura al cliente */
-        private PrintWriter salida;
+               // Confirma la conexión con el destinatario
+               salida.println("Server: Conectado con " + destinatario + ". Puedes empezar a chatear.");
 
-        /** Nombre de usuario del cliente */
-        private String nombreUsuario;
-
-        /**
-         * Crea un manejador para un cliente
-         *
-         * @param socket socket de comunicación
-         * @param entrada canal de lectura
-         * @param salida canal de escritura
-         * @param nombreUsuario nombre del usuario
-         */
-        public ManejadorCliente(Socket socket, BufferedReader entrada, PrintWriter salida, String nombreUsuario) {
-            this.socket = socket;
-            this.entrada = entrada;
-            this.salida = salida;
-            this.nombreUsuario = nombreUsuario;
-        }
-
-        /**
-         * Ejecuta el hilo de atención al cliente
-         *
-         */
-        @Override
-        public void run() {
-            try {
-                String listaUsuarios = "Usuarios disponibles:\n";
-
-                if (usuarios.size() < 2) {
-                    listaUsuarios = "- No hay nadie conectado.\n";
-                } else {
-                    for (String usuarioDisponible : usuarios.keySet()) {
-                        if (!usuarioDisponible.equals(nombreUsuario)) {
-                            listaUsuarios += "- " + usuarioDisponible + "\n";
-                        }
-                    }
-                }
-                salida.println("Server: Elige con quién deseas chatear. \nEscribe el nombre de usuario de tu destinatario:\n" + listaUsuarios);
-                String destinatario = entrada.readLine();
-
-                if (!usuarios.containsKey(destinatario)) {
-                    salida.println("Server: El usuario " + destinatario + " no existe o no está conectado. Chat cerrado.");
-                    socket.close();
-                    System.out.println("Usuario " + nombreUsuario + " desconectado");
-                    return;
-                }
-
-                salida.println("Server: Conectado con " + destinatario + ". Puedes empezar a chatear.");
-
-                String mensaje;
-                while (true) {
-                    if ((mensaje = entrada.readLine()) != null) {
-                        if ("Chao".equals(mensaje) || "chao".equals(mensaje)) {
-                            usuarios.get(destinatario).println("Server: " + nombreUsuario + " se ha desconectado");
-                            usuarios.remove(nombreUsuario);
-                            socket.close();
-                            System.out.println("Usuario " + nombreUsuario + " desconectado");
-                            break;
-                        } else {
-                            usuarios.get(destinatario).println(nombreUsuario + ": " + mensaje);
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println("Error de E/S con el cliente: " + e.getMessage());
-            }
-        }
-    }
+               String mensaje;
+               while (true) {
+                   // Lee los mensajes del cliente
+                   if ((mensaje = entrada.readLine()) != null) {
+                       // Si el cliente envía "Chao", cierra la conexión
+                       if ("Chao".equals(mensaje) || "chao".equals(mensaje)) {
+                           // Notifica al destinatario que el usuario se ha desconectado
+                           usuarios.get(destinatario).println("Server: " + nombreUsuario + " se ha desconectado");
+                           usuarios.remove(nombreUsuario);
+                           socket.close();
+                           System.out.println("Usuario " + nombreUsuario + " desconectado");
+                           break;
+                       } else {
+                           // Reenvía el mensaje al destinatario
+                           usuarios.get(destinatario).println(nombreUsuario + ": " + mensaje);
+                       }
+                   }
+               }
+           } catch (IOException e) {
+               // Maneja cualquier error de E/S que pueda ocurrir
+               System.out.println("Error de E/S con el cliente: " + e.getMessage());
+           }
+       }
+       
+   }
+   
 }
